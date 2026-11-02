@@ -12,6 +12,7 @@ class ServiceTests(BaseCase):
         self.assertEqual(self.cancel(), "cancelled")
         self.assertEqual(Registration.objects.count(), 1)
         self.assertEqual(with_availability().get(pk=self.activity.pk).available, 2)
+        self.assertEqual(list(Registration.objects.get().cancellations.values_list("cancelled_at", flat=True)), [NOW])
     def test_cancellation_accepts_exactly_24_hours_before_start(self):
         self.enroll()
         self.activity.starts_at = NOW + timedelta(hours=24)
@@ -64,12 +65,19 @@ class ServiceTests(BaseCase):
     def test_success_and_availability(self):
         self.assertEqual(self.enroll(), "registered")
         self.assertEqual(with_availability().get(pk=self.activity.pk).available, 1)
-    def test_previously_cancelled_even_when_now_full_disabled_or_started(self):
+    def test_cancelled_registration_rejects_disabled_started_or_full_activity(self):
         self.activity.capacity=1; self.activity.save()
         self.enroll(); self.cancel()
-        self.activity.starts_at=NOW; self.activity.is_active=False; self.activity.save()
-        self.assertEqual(self.enroll(), "previously_cancelled")
-        self.assertEqual(Registration.objects.count(), 1)
+        self.activity.is_active=False; self.activity.save()
+        self.assertEqual(self.enroll(), "disabled")
+        self.activity.is_active=True; self.activity.starts_at=NOW; self.activity.save()
+        self.assertEqual(self.enroll(), "started")
+        self.activity.starts_at=NOW+timedelta(hours=48); self.activity.save()
+        self.enroll(self.bruno)
+        self.assertEqual(self.enroll(), "full")
+        self.assertIsNotNone(Registration.objects.get(student=self.ana).cancelled_at)
+        self.assertEqual(Registration.objects.filter(student=self.ana).count(), 1)
+        self.assertEqual(Registration.objects.count(), 2)
     def test_duplicate_even_when_now_full_or_started(self):
         self.enroll()
         self.activity.capacity=1; self.activity.starts_at=NOW; self.activity.is_active=False; self.activity.save()
@@ -77,8 +85,16 @@ class ServiceTests(BaseCase):
         self.assertEqual(Registration.objects.count(), 1)
     def test_reregistration_over_cancelled_is_its_own_result_and_creates_no_row(self):
         self.enroll(); self.cancel()
-        self.assertEqual(self.enroll(), "previously_cancelled")
+        self.assertEqual(self.enroll(), "reregistered")
         self.assertEqual(Registration.objects.count(), 1)
+        self.assertIsNone(Registration.objects.get().cancelled_at)
+    def test_each_cancelled_reregistration_cycle_is_kept_in_history(self):
+        self.enroll(); self.cancel()
+        self.assertEqual(self.enroll(), "reregistered")
+        self.assertEqual(self.cancel(now=NOW + timedelta(hours=1)), "cancelled")
+        registration = Registration.objects.get()
+        self.assertEqual(Registration.objects.count(), 1)
+        self.assertEqual(list(registration.cancellations.values_list("cancelled_at", flat=True)), [NOW, NOW + timedelta(hours=1)])
     def test_full(self):
         self.activity.capacity=1; self.activity.save(); self.enroll()
         self.assertEqual(self.enroll(self.bruno), "full")

@@ -11,7 +11,7 @@ from .forms import RegistrationForm
 from .models import Registration
 from .services import CANCELLATION_WINDOW_HOURS, MESSAGES, can_cancel, cancel_registration, register, set_activity_enabled, with_availability
 
-SUCCESS_RESULTS = {"registered", "cancelled", "enabled", "disabled_activity"}
+SUCCESS_RESULTS = {"registered", "reregistered", "cancelled", "enabled", "disabled_activity"}
 
 def flash_result(request, result):
     severity = "success" if result in SUCCESS_RESULTS else "warning"
@@ -33,7 +33,7 @@ def detail(request, pk):
     registration = Registration.objects.filter(activity=activity, student=request.user).first()
     now = timezone.now()
     open_for_registration = activity.is_active and activity.starts_at > now and activity.available > 0
-    return render(request, "activities/detail.html", {"activity": activity, "registration": registration, "can_register": open_for_registration and registration is None, "can_cancel": can_cancel(registration, now), "cancellation_window_hours": CANCELLATION_WINDOW_HOURS, "form": RegistrationForm()})
+    return render(request, "activities/detail.html", {"activity": activity, "registration": registration, "cancellations": registration.cancellations.all() if registration else (), "can_register": open_for_registration and (registration is None or registration.cancelled_at is not None), "can_cancel": can_cancel(registration, now), "cancellation_window_hours": CANCELLATION_WINDOW_HOURS, "form": RegistrationForm()})
 
 @login_required
 @require_POST
@@ -54,8 +54,8 @@ def cancel(request, pk):
 @login_required
 def mine(request):
     now = timezone.now()  # Un solo instante para todas las filas.
-    registrations = Registration.objects.filter(student=request.user).select_related("activity")
-    rows = [{"registration": registration, "can_cancel": can_cancel(registration, now)} for registration in registrations]
+    registrations = Registration.objects.filter(student=request.user).select_related("activity").prefetch_related("cancellations")
+    rows = [{"registration": registration, "cancellations": registration.cancellations.all(), "can_cancel": can_cancel(registration, now)} for registration in registrations]
     return render(request, "activities/mine.html", {"rows": rows})
 
 @login_required
@@ -87,7 +87,7 @@ def teacher_activity_detail(request, pk):
     if not request.user.is_staff:
         raise PermissionDenied
     activity = get_object_or_404(with_availability().filter(responsible=request.user), pk=pk)
-    registrations = (Registration.objects.filter(activity=activity).select_related("student")
+    registrations = (Registration.objects.filter(activity=activity).prefetch_related("cancellations").select_related("student")
         .order_by(Case(When(cancelled_at__isnull=True, then=Value(0)), default=Value(1), output_field=IntegerField()), "created_at", "pk"))
     # Prototipo descartable: tres variantes en la pantalla docente existente.
     variant = request.GET.get("variant")

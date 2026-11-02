@@ -53,16 +53,15 @@ class ViewTests(BaseCase):
         response=page()
         self.assertContains(response,"Inscripción cancelada el 01/10/2030 09:00")
         self.assertNotContains(response,"Cancelar inscripción");self.assertNotContains(response,"Inscribirme")
-    def test_reregistration_over_cancelled_explains_and_creates_no_row(self):
+    def test_reregistration_over_cancelled_reactivates_existing_registration(self):
         self.client.force_login(self.ana); self.enroll(); self.cancel()
         with freeze_view_clock(self.client, NOW):
             page=self.client.get(f"/activities/{self.activity.pk}/")
             response=self.client.post(f"/activities/{self.activity.pk}/register/", follow=True)
-        self.assertContains(page,"No podés volver a inscribirte en esta actividad.")
-        self.assertNotContains(page,"Inscribirme")
-        self.assertContains(response,"Cancelaste tu inscripción; no podés volver a inscribirte.")
-        self.assertNotContains(response,"Ya estás inscripto")
+        self.assertContains(page,"Reinscribirme")
+        self.assertContains(response,"Reinscripción confirmada.")
         self.assertEqual(Registration.objects.count(),1)
+        self.assertIsNone(Registration.objects.get().cancelled_at)
     def test_http_reregistration_blocked_when_full_disabled_or_started(self):
         self.client.force_login(self.ana)
         configurations={"llena":dict(capacity=1),"deshabilitada":dict(is_active=False),"iniciada":dict(starts_at=timezone.now()-timedelta(hours=1))}
@@ -73,7 +72,8 @@ class ViewTests(BaseCase):
                 if name=="llena": Registration.objects.create(student=self.bruno,activity=target)
                 before=Registration.objects.count()
                 response=self.client.post(f"/activities/{target.pk}/register/",follow=True)
-                self.assertContains(response,"Cancelaste tu inscripción; no podés volver a inscribirte.")
+                messages={"llena":"La actividad no tiene cupos disponibles.","deshabilitada":"La actividad está deshabilitada.","iniciada":"La actividad ya comenzó."}
+                self.assertContains(response,messages[name])
                 self.assertEqual(Registration.objects.count(),before)
     def test_catalog_filters_and_full_visible(self):
         self.client.force_login(self.ana)
@@ -248,6 +248,8 @@ class ViewTests(BaseCase):
         teacher=get_user_model().objects.create_user("docente-detalle",is_staff=True)
         target=activity(title="Actividad histórica",responsible=teacher,is_active=False,starts_at=NOW-timedelta(days=1))
         cancelled=Registration.objects.create(student=self.ana,activity=target,cancelled_at=NOW)
+        from activities.models import Cancellation
+        Cancellation.objects.create(registration=cancelled,cancelled_at=NOW)
         current=Registration.objects.create(student=self.bruno,activity=target)
         Registration.objects.filter(pk=cancelled.pk).update(created_at=NOW-timedelta(days=1))
         Registration.objects.filter(pk=current.pk).update(created_at=NOW-timedelta(days=2))

@@ -11,7 +11,7 @@
       <td>{{ registration.student }}</td>
       <td>{{ registration.created_at|date:"d/m/Y H:i" }}</td>
       <td>{% if registration.cancelled_at %}Cancelada{% else %}Vigente{% endif %}</td>
-      <td>{% if registration.cancelled_at %}{{ registration.cancelled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
+      <td>{% for cancellation in registration.cancellations.all %}{{ cancellation.cancelled_at|date:"d/m/Y H:i" }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
     </tr>
   {% empty %}
     <tr><td colspan="4">No hay inscripciones.</td></tr>
