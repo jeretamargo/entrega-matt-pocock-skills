@@ -19,7 +19,7 @@
     {% if registration %}
       {% include 'activities/_registration_state.html' with registration=registration can_cancel=can_cancel %}
       {% if registration.cancelled_at %}
-      <p>No podés volver a inscribirte en esta actividad.</p>
+      {% if can_register %}<form method="post" action="{% url 'register' activity.pk %}" class="inline-form">{% csrf_token %}{{ form }}<button>Volver a inscribirme</button></form>{% else %}<p class="muted">No es posible reinscribirse: la actividad está deshabilitada, comenzó o no tiene cupos.</p>{% endif %}
       {% elif not can_cancel %}
       <p class="muted">Solo podés cancelar hasta {{ cancellation_window_hours }} horas antes del inicio de la actividad.</p>
       {% endif %}
@@ -29,6 +29,10 @@
     </form>
     {% else %}
     <p class="muted">Esta actividad no admite nuevas inscripciones.</p>
+    {% endif %}
+    {% if registration.cancellations.all %}
+    <h2>Historial de cancelaciones</h2>
+    <ul>{% for cancellation in registration.cancellations.all %}<li>Cancelada el {{ cancellation.cancelled_at|date:'d/m/Y H:i' }} · Ushuaia</li>{% endfor %}</ul>
     {% endif %}
   </section>
 </article>

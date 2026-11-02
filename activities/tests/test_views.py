@@ -53,17 +53,18 @@ class ViewTests(BaseCase):
         response=page()
         self.assertContains(response,"Inscripción cancelada el 01/10/2030 09:00")
         self.assertNotContains(response,"Cancelar inscripción");self.assertNotContains(response,"Inscribirme")
-    def test_reregistration_over_cancelled_explains_and_creates_no_row(self):
+    def test_reregistration_reactivates_existing_row_and_detail_shows_history(self):
         self.client.force_login(self.ana); self.enroll(); self.cancel()
         with freeze_view_clock(self.client, NOW):
             page=self.client.get(f"/activities/{self.activity.pk}/")
             response=self.client.post(f"/activities/{self.activity.pk}/register/", follow=True)
-        self.assertContains(page,"No podés volver a inscribirte en esta actividad.")
-        self.assertNotContains(page,"Inscribirme")
-        self.assertContains(response,"Cancelaste tu inscripción; no podés volver a inscribirte.")
-        self.assertNotContains(response,"Ya estás inscripto")
+        self.assertContains(page,"Inscripción cancelada")
+        self.assertContains(page,"Volver a inscribirme")
+        self.assertContains(response,"Inscripción reactivada.")
         self.assertEqual(Registration.objects.count(),1)
-    def test_http_reregistration_blocked_when_full_disabled_or_started(self):
+        self.assertIsNone(Registration.objects.get().cancelled_at)
+        self.assertContains(self.client.get(f"/activities/{self.activity.pk}/"),"01/10/2030 09:00")
+    def test_http_reregistration_reports_disabled_started_or_full(self):
         self.client.force_login(self.ana)
         configurations={"llena":dict(capacity=1),"deshabilitada":dict(is_active=False),"iniciada":dict(starts_at=timezone.now()-timedelta(hours=1))}
         for name,config in configurations.items():
@@ -73,7 +74,7 @@ class ViewTests(BaseCase):
                 if name=="llena": Registration.objects.create(student=self.bruno,activity=target)
                 before=Registration.objects.count()
                 response=self.client.post(f"/activities/{target.pk}/register/",follow=True)
-                self.assertContains(response,"Cancelaste tu inscripción; no podés volver a inscribirte.")
+                self.assertContains(response,{"llena":"La actividad no tiene cupos disponibles.","deshabilitada":"La actividad está deshabilitada.","iniciada":"La actividad ya comenzó."}[name])
                 self.assertEqual(Registration.objects.count(),before)
     def test_catalog_filters_and_full_visible(self):
         self.client.force_login(self.ana)
