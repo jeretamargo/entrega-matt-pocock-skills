@@ -2,7 +2,7 @@ from datetime import timedelta
 from unittest.mock import patch
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, OperationalError, transaction
-from activities.models import Registration
+from activities.models import Cancellation, Registration
 from activities.services import cancel_registration, register, with_availability
 from .support import NOW, BaseCase, activity
 
@@ -83,11 +83,30 @@ class ServiceTests(BaseCase):
         self.activity.capacity=1; self.activity.starts_at=NOW; self.activity.is_active=False; self.activity.save()
         self.assertEqual(self.enroll(), "already_registered")
         self.assertEqual(Registration.objects.count(), 1)
-    def test_reregistration_over_cancelled_is_its_own_result_and_creates_no_row(self):
+    def test_reregistration_reactivates_cancelled_registration_before_start(self):
         self.enroll(); self.cancel()
-        self.assertEqual(self.enroll(), "reregistered")
+        self.assertEqual(self.enroll(now=self.activity.starts_at-timedelta(microseconds=1)), "reregistered")
         self.assertEqual(Registration.objects.count(), 1)
         self.assertIsNone(Registration.objects.get().cancelled_at)
+        self.assertEqual(Cancellation.objects.count(), 1)
+        self.assertEqual(with_availability().get(pk=self.activity.pk).available, 1)
+    def test_reregistration_is_allowed_inside_cancellation_window(self):
+        self.enroll(); self.cancel()
+        self.assertEqual(self.enroll(now=self.activity.starts_at-timedelta(hours=1)), "reregistered")
+    def test_reregistration_rejects_started_disabled_or_full_without_reactivation(self):
+        self.enroll(); self.cancel()
+        self.activity.is_active=False; self.activity.save()
+        self.assertEqual(self.enroll(), "disabled")
+        self.activity.is_active=True; self.activity.starts_at=NOW; self.activity.save()
+        self.assertEqual(self.enroll(), "started")
+        self.activity.starts_at=NOW+timedelta(hours=48); self.activity.capacity=1; self.activity.save()
+        self.enroll(self.bruno)
+        self.assertEqual(self.enroll(), "full")
+        self.assertIsNotNone(Registration.objects.get(student=self.ana).cancelled_at)
+    def test_each_cancellation_is_preserved_when_registration_is_reactivated(self):
+        self.enroll(); self.cancel(); self.assertEqual(self.enroll(), "reregistered")
+        self.assertEqual(self.cancel(now=NOW+timedelta(hours=1)), "cancelled")
+        self.assertEqual(list(Cancellation.objects.values_list("cancelled_at", flat=True)), [NOW, NOW+timedelta(hours=1)])
     def test_each_cancelled_reregistration_cycle_is_kept_in_history(self):
         self.enroll(); self.cancel()
         self.assertEqual(self.enroll(), "reregistered")

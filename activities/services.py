@@ -11,6 +11,7 @@ MESSAGES = {
     "enabled": "Actividad habilitada.",
     "disabled_activity": "Actividad deshabilitada; se conservaron las inscripciones vigentes.",
     "registered": "Inscripción confirmada.",
+    "reactivated": "Inscripción reactivada.",
     "already_registered": "Ya estás inscripto en esta actividad.",
     "reregistered": "Reinscripción confirmada.",
     "full": "La actividad no tiene cupos disponibles.",

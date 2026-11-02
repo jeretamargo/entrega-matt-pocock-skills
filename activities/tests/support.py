@@ -41,7 +41,8 @@ class BaseCase(TestCase):
         self.bruno = User.objects.create_user("bruno", password="test-pass")
         self.activity = activity()
     def enroll(self, user=None, **kwargs):
-        return register(student=user or self.ana, activity_id=self.activity.pk, now=NOW, **kwargs)
+        kwargs.setdefault("now", NOW)
+        return register(student=user or self.ana, activity_id=self.activity.pk, **kwargs)
     def cancel(self, user=None, **kwargs):
         kwargs.setdefault("now", NOW)
         return cancel_registration(student=user or self.ana, activity_id=self.activity.pk, **kwargs)

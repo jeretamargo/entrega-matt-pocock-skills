@@ -37,7 +37,6 @@ class Cancellation(models.Model):
     cancelled_at = models.DateTimeField("cancelación")
     class Meta:
         ordering = ["cancelled_at", "pk"]
-
 class DemoSeed(models.Model):
     key = models.CharField(max_length=40, primary_key=True)
     reference_time = models.DateTimeField()

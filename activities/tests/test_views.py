@@ -62,7 +62,8 @@ class ViewTests(BaseCase):
         self.assertContains(response,"Reinscripción confirmada.")
         self.assertEqual(Registration.objects.count(),1)
         self.assertIsNone(Registration.objects.get().cancelled_at)
-    def test_http_reregistration_blocked_when_full_disabled_or_started(self):
+        self.assertContains(self.client.get(f"/activities/{self.activity.pk}/"),"01/10/2030 09:00")
+    def test_http_reregistration_reports_disabled_started_or_full(self):
         self.client.force_login(self.ana)
         configurations={"llena":dict(capacity=1),"deshabilitada":dict(is_active=False),"iniciada":dict(starts_at=timezone.now()-timedelta(hours=1))}
         for name,config in configurations.items():
