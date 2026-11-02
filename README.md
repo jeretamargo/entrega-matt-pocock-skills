@@ -110,3 +110,13 @@ La exportación excluye bases SQLite, entornos, caches y secretos. Las solucione
 ## Revisión técnica del checkpoint actual
 
 La base actual (v2) evalúa el reloj real de inscripción dentro de IMMEDIATE inmediatamente antes de verificar el inicio. Así, una solicitud que espera un escritor y llega a una actividad ya iniciada devuelve `started` sin ocupar cupo. El parámetro `now` conserva el reloj fijo de pruebas; los duplicados se reconocen primero. La versión anterior se preserva como `base-v1.tar.gz` para reproducir los recorridos históricos; no se reescribe su procedencia.
+
+## Reflexión
+
+En mi caso implementé el módulo **“Reinscripción”** siguiendo el workflow `grill -> to-spec -> to-tickets -> implement -> retro`.
+
+Durante el _grill_ surgió una pregunta sobre el historial de inscripciones que terminó ampliando el alcance inicial y derivó en una implementación más completa del módulo. A partir de la especificación, el agente creó un issue en GitHub con dos tickets: uno para implementar la reinscripción y otro para incorporar el historial de inscripciones.
+
+La retrospectiva permitió detectar un problema importante del proceso:
+
+> **Acuerdo previo sobre interfaces compartidas — impacto alto.** La rama ya tenía un modelo `Cancellation` y el resultado `reregistered`; el ticket implementó paralelamente `RegistrationCancellation` y `reactivated`. Al integrar ambas ramas hubo conflictos en modelos, servicio, vistas y pruebas, además de una migración duplicada. Antes de implementar tickets que amplían una función existente, convendría señalar en el ticket los nombres y modelos ya incorporados, o registrar la decisión compartida en el ADR.
